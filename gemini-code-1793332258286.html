@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Volume Normalizer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- JSZip for Zip Download All -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.5); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.8); }
+        .drop-active { border-color: #6366f1 !important; background-color: rgba(99, 102, 241, 0.1) !important; }
+
+        /* 빨간색과 초록색 교차 깜빡임 애니메이션 */
+        @keyframes redGreenBlink {
+            0%, 100% { background-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+            50% { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        }
+        .blink-red-green {
+            animation: redGreenBlink 1.2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300 selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-[#0d1322]/90 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-[98%] mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold shadow-lg shadow-indigo-500/10 shrink-0">
+                    <i class="fa-solid text-lg fa-sliders"></i>
+                </div>
+                <div class="min-w-0">
+                    <h1 class="text-base sm:text-lg font-bold bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent truncate">
+                        Audio Volume Normalizer
+                    </h1>
+                    <p class="text-xs text-slate-400 hidden sm:block truncate">실시간 보컬/악기 모니터링 & 볼륨 평준화 도구</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 shrink-0">
+                <span class="text-xs px-2.5 py-1 rounded-full bg-slate-900 border border-slate-700/80 text-slate-300 flex items-center gap-2 whitespace-nowrap shadow-inner">
+                    <span class="w-2.5 h-2.5 rounded-full blink-red-green shrink-0"></span>
+                    실시간 보컬/악기 볼륨 평준화 플레이어
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-[98%] w-full mx-auto px-2 sm:px-4 py-6 flex flex-col gap-6 pb-36">
+
+        <!-- Top Control Panel & Target Settings -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left: Drag & Drop Zone & Playlist Area -->
+            <div class="lg:col-span-8 flex flex-col gap-6">
+                <!-- Drag & Drop Zone -->
+                <div class="bg-[#0d1322]/70 border border-slate-800/80 rounded-2xl p-4 sm:p-6 flex flex-col justify-between shadow-xl relative overflow-hidden group">
+                    <div id="dropZone" class="border-2 border-dashed border-slate-700/80 hover:border-indigo-500/80 rounded-xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[170px] bg-slate-950/40 hover:bg-slate-900/60">
+                        <input type="file" id="fileInput" multiple accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" class="hidden">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-2 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-cloud-arrow-up text-xl"></i>
+                        </div>
+                        <h3 class="text-sm sm:text-base font-semibold text-slate-200 mb-1">
+                            음원 파일들을 드래그 앤 드롭하거나 클릭하여 추가하세요
+                        </h3>
+                        <p class="text-xs text-slate-400 mb-3">
+                            지원 포맷: MP3, WAV, FLAC, AAC, OGG, M4A 등 (다중 업로드 가능)
+                        </p>
+                        <button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition shadow-lg shadow-indigo-600/20 flex items-center gap-2">
+                            <i class="fa-solid fa-folder-open"></i> 파일 선택
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Task List Area -->
+                <section class="bg-[#0d1322]/70 border border-slate-800/80 rounded-2xl flex flex-col overflow-hidden shadow-xl">
+                    <div class="p-4 sm:px-6 bg-[#0d1322] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-sm font-semibold text-slate-200 whitespace-nowrap">
+                                업로드된 파일 목록 (<span id="fileCount">0</span>)
+                            </h2>
+                            <span id="statusSummary" class="text-xs text-slate-400 truncate">파일을 업로드 후 기준 음원을 지정해 주세요</span>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button id="downloadAllBtn" onclick="openDownloadModal('all')" disabled class="px-3 py-1.5 bg-slate-800 text-slate-500 cursor-not-allowed rounded-lg text-xs font-medium transition flex items-center gap-1.5 whitespace-nowrap">
+                                <i class="fa-solid fa-file-zipper"></i> 전체 다운로드 (.ZIP)
+                            </button>
+                            <button id="clearAllBtn" onclick="clearAllFiles()" disabled class="px-3 py-1.5 bg-slate-800 hover:bg-rose-500/20 hover:text-rose-300 text-slate-400 rounded-lg text-xs font-medium transition flex items-center gap-1.5 whitespace-nowrap">
+                                <i class="fa-solid fa-trash-can"></i> 목록 비우기
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="emptyList" class="p-12 text-center flex flex-col items-center justify-center">
+                        <div class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 mb-3">
+                            <i class="fa-solid fa-music text-xl"></i>
+                        </div>
+                        <p class="text-sm text-slate-400">목록이 비어있습니다. 기준이 될 음원과 볼륨을 맞출 음악 파일들을 업로드해 주세요.</p>
+                    </div>
+
+                    <div id="trackList" class="divide-y divide-slate-800/60 max-h-[460px] overflow-y-auto hidden">
+                        <!-- Track Items inserted dynamically -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Panel: Reference Track, Mode Selection & Realtime EQ Canvas -->
+            <div class="lg:col-span-4 bg-[#0d1322]/70 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-xl gap-4">
+                <div class="flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-bookmark text-amber-400"></i> 기준 음원 및 맞춤 모드
+                        </h2>
+                        <span id="refStatusBadge" class="px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 text-xs rounded-md font-medium whitespace-nowrap">
+                            미지정
+                        </span>
+                    </div>
+
+                    <!-- Selected Reference Info Card -->
+                    <div id="refTrackCard" class="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                            <i class="fa-solid fa-star text-base"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <h4 id="refTrackName" class="text-xs font-semibold text-slate-200 truncate">목록에서 기준 음원을 지정해주세요</h4>
+                            <p id="refTrackMetrics" class="text-[11px] text-slate-400 mt-0.5 truncate">목표 수치: -</p>
+                        </div>
+                    </div>
+
+                    <!-- Normalization Mode Selection Buttons -->
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs text-slate-300 font-medium flex items-center justify-between">
+                            <span>평준화 기준 모드 설정</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="modeVocalBtn" onclick="setNormMode('vocal')" class="px-3 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 bg-indigo-600/30 border-indigo-500 text-indigo-200 shadow-lg whitespace-nowrap">
+                                <i class="fa-solid fa-microphone text-indigo-400"></i> 1. 보컬 기준
+                            </button>
+                            <button id="modeInstBtn" onclick="setNormMode('instrument')" class="px-3 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200 whitespace-nowrap">
+                                <i class="fa-solid fa-guitar text-emerald-400"></i> 2. 악기 기준
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Professional DAW Equalizer Grid Canvas Box -->
+                    <div class="w-full bg-[#070a13] border border-slate-800 rounded-xl overflow-hidden relative h-36 flex items-center shadow-inner">
+                        <canvas id="equalizerCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+                        <div class="absolute top-2 left-3 text-[10px] font-mono text-slate-400 pointer-events-none flex items-center gap-2">
+                            <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">PRO-Q SPECTRUM</span>
+                        </div>
+                        <div class="absolute top-2 right-3 text-[10px] font-mono text-emerald-400 pointer-events-none flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            MONITORING
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-800/80">
+                    <button id="processAllBtn" onclick="processAllTracksToRef()" disabled class="w-full py-3 bg-slate-800 text-slate-500 cursor-not-allowed font-semibold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg whitespace-nowrap">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> 선택된 모드로 전체 평준화 시작
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Player Bar Footer Floating Control -->
+        <div id="playerBar" class="bg-[#0b101d]/95 border border-slate-800 rounded-2xl p-4 shadow-2xl backdrop-blur flex flex-col md:flex-row items-center justify-between gap-4 fixed bottom-4 left-2 right-2 sm:left-4 sm:right-4 max-w-[98%] mx-auto z-40 hidden transition-all">
+            
+            <div class="flex items-center gap-3 w-full md:w-1/3 min-w-0">
+                <button id="playerPlayBtn" onclick="togglePlayPreview()" class="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
+                    <i class="fa-solid fa-play text-sm"></i>
+                </button>
+                <div class="min-w-0 flex-1">
+                    <h4 id="playerTrackTitle" class="text-xs font-semibold text-slate-200 truncate">재생 중인 곡 없음</h4>
+                    <p id="playerTrackStatus" class="text-[11px] text-indigo-400 truncate">오디오 모니터링 대기 중</p>
+                </div>
+            </div>
+
+            <!-- Listening Monitor Filter Selector Buttons -->
+            <div class="flex items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800 w-full md:w-auto justify-center shrink-0">
+                <span class="text-[10px] text-slate-500 font-mono mr-1 hidden sm:inline whitespace-nowrap">LISTEN MODE:</span>
+                <button id="listenFullBtn" onclick="setListenMode('full')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition bg-indigo-600 text-white shadow whitespace-nowrap">
+                    <i class="fa-solid fa-music mr-1"></i> 전체
+                </button>
+                <button id="listenVocalBtn" onclick="setListenMode('vocal')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition text-slate-400 hover:text-slate-200 whitespace-nowrap">
+                    <i class="fa-solid fa-microphone mr-1 text-indigo-400"></i> 보컬 강조
+                </button>
+                <button id="listenInstBtn" onclick="setListenMode('instrument')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition text-slate-400 hover:text-slate-200 whitespace-nowrap">
+                    <i class="fa-solid fa-guitar mr-1 text-emerald-400"></i> 악기 강조 (MR)
+                </button>
+            </div>
+
+            <!-- Timeline controls -->
+            <div class="flex items-center gap-3 w-full md:w-1/3">
+                <span id="playerCurrentTime" class="text-[11px] font-mono text-slate-400 whitespace-nowrap">00:00</span>
+                <input type="range" id="playerProgress" value="0" min="0" max="100" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                <span id="playerTotalTime" class="text-[11px] font-mono text-slate-400 whitespace-nowrap">00:00</span>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Download Format Selection Modal Dialog -->
+    <div id="downloadModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden transition-opacity">
+        <div class="bg-[#0d1322] border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-5">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-file-export text-indigo-400"></i> 다운로드 파일 포맷 선택
+                </h3>
+                <button onclick="closeDownloadModal()" class="text-slate-400 hover:text-slate-200 text-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-400 leading-relaxed">
+                변환이 완료된 음원을 추출할 파일 포맷(확장자)을 선택해 주세요.
+            </p>
+
+            <div class="grid grid-cols-2 gap-2.5">
+                <label class="cursor-pointer">
+                    <input type="radio" name="formatOption" value="wav" checked class="peer hidden">
+                    <div class="p-3 border border-slate-800 peer-checked:border-indigo-500 peer-checked:bg-indigo-600/20 rounded-xl text-center transition">
+                        <span class="block text-xs font-bold text-slate-200">WAV</span>
+                        <span class="text-[10px] text-slate-400">무손실 원음</span>
+                    </div>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" name="formatOption" value="mp3" class="peer hidden">
+                    <div class="p-3 border border-slate-800 peer-checked:border-indigo-500 peer-checked:bg-indigo-600/20 rounded-xl text-center transition">
+                        <span class="block text-xs font-bold text-slate-200">MP3</span>
+                        <span class="text-[10px] text-slate-400">범용 압축음원</span>
+                    </div>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" name="formatOption" value="flac" class="peer hidden">
+                    <div class="p-3 border border-slate-800 peer-checked:border-indigo-500 peer-checked:bg-indigo-600/20 rounded-xl text-center transition">
+                        <span class="block text-xs font-bold text-slate-200">FLAC</span>
+                        <span class="text-[10px] text-slate-400">고음질 무손실</span>
+                    </div>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" name="formatOption" value="ogg" class="peer hidden">
+                    <div class="p-3 border border-slate-800 peer-checked:border-indigo-500 peer-checked:bg-indigo-600/20 rounded-xl text-center transition">
+                        <span class="block text-xs font-bold text-slate-200">OGG</span>
+                        <span class="text-[10px] text-slate-400">웹 표준 포맷</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2">
+                <button onclick="closeDownloadModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition">
+                    취소
+                </button>
+                <button onclick="confirmDownloadExecution()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl transition shadow-lg shadow-indigo-600/20">
+                    <i class="fa-solid fa-download mr-1"></i> 다운로드
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs shadow-2xl transition-all transform translate-y-20 opacity-0 z-50 flex items-center gap-2 pointer-events-none whitespace-nowrap">
+        <i id="toastIcon" class="fa-solid fa-circle-info text-indigo-400"></i>
+        <span id="toastMsg">알림 메시지</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        let tracks = [];
+        let referenceTrackId = null;
+        let selectedNormMode = 'vocal'; // 'vocal' or 'instrument'
+        let currentListenMode = 'full'; // 'full', 'vocal', 'instrument'
+        
+        let audioCtx = null;
+        let currentPlayingTrackId = null;
+        let currentPlayingType = null;
+        
+        let activeAudioElement = new Audio();
+        
+        let sourceNode = null;
+        let splitterNode = null;
+        let mergerNode = null;
+        let vocalFilterBp = null;
+        let instGainLeft = null;
+        let instGainRight = null;
+        let masterListenGain = null;
+        let analyserNode = null;
+        
+        let isNodeConnected = false;
+        let animationFrameId = null;
+
+        // Modal State
+        let pendingDownloadType = null; // 'single' or 'all'
+        let pendingDownloadTrackId = null;
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const trackList = document.getElementById('trackList');
+        const emptyList = document.getElementById('emptyList');
+        const fileCount = document.getElementById('fileCount');
+        const processAllBtn = document.getElementById('processAllBtn');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        const statusSummary = document.getElementById('statusSummary');
+        
+        const refStatusBadge = document.getElementById('refStatusBadge');
+        const refTrackName = document.getElementById('refTrackName');
+        const refTrackMetrics = document.getElementById('refTrackMetrics');
+        const modeVocalBtn = document.getElementById('modeVocalBtn');
+        const modeInstBtn = document.getElementById('modeInstBtn');
+
+        const listenFullBtn = document.getElementById('listenFullBtn');
+        const listenVocalBtn = document.getElementById('listenVocalBtn');
+        const listenInstBtn = document.getElementById('listenInstBtn');
+
+        const playerBar = document.getElementById('playerBar');
+        const playerPlayBtn = document.getElementById('playerPlayBtn');
+        const playerTrackTitle = document.getElementById('playerTrackTitle');
+        const playerTrackStatus = document.getElementById('playerTrackStatus');
+        const playerCurrentTime = document.getElementById('playerCurrentTime');
+        const playerTotalTime = document.getElementById('playerTotalTime');
+        const playerProgress = document.getElementById('playerProgress');
+        const equalizerCanvas = document.getElementById('equalizerCanvas');
+        const downloadModal = document.getElementById('downloadModal');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initAudioContext();
+            setupDragAndDrop();
+            setupAudioPlayer();
+            initCanvasSize();
+            
+            ['click', 'touchstart', 'keydown'].forEach(evt => {
+                window.addEventListener(evt, () => {
+                    ensureAudioContext();
+                }, { once: true });
+            });
+        });
+
+        function initAudioContext() {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass && !audioCtx) {
+                audioCtx = new AudioContextClass();
+            }
+        }
+
+        function ensureAudioContext() {
+            initAudioContext();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(err => console.error("AudioContext resume failed:", err));
+            }
+        }
+
+        function initCanvasSize() {
+            if (equalizerCanvas) {
+                equalizerCanvas.width = equalizerCanvas.offsetWidth || 350;
+                equalizerCanvas.height = equalizerCanvas.offsetHeight || 144;
+                drawStaticGrid(equalizerCanvas.getContext('2d'), equalizerCanvas.width, equalizerCanvas.height);
+            }
+        }
+
+        window.addEventListener('resize', initCanvasSize);
+
+        function setNormMode(mode) {
+            ensureAudioContext();
+            selectedNormMode = mode;
+            if (mode === 'vocal') {
+                modeVocalBtn.className = "px-3 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 bg-indigo-600/30 border-indigo-500 text-indigo-200 shadow-lg whitespace-nowrap";
+                modeInstBtn.className = "px-3 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200 whitespace-nowrap";
+                showToast("보컬 대역 중심 모드로 변경되었습니다.");
+            } else {
+                modeInstBtn.className = "px-3 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 bg-emerald-600/30 border-emerald-500 text-emerald-200 shadow-lg whitespace-nowrap";
+                modeVocalBtn.className = "px-3 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200 whitespace-nowrap";
+                showToast("악기 대역 중심 모드로 변경되었습니다.");
+            }
+            updateRefCard();
+            renderTrackList();
+        }
+
+        function setListenMode(mode) {
+            ensureAudioContext();
+            currentListenMode = mode;
+
+            listenFullBtn.className = "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap " + (mode === 'full' ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200");
+            listenVocalBtn.className = "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap " + (mode === 'vocal' ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200");
+            listenInstBtn.className = "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap " + (mode === 'instrument' ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200");
+
+            applyRealtimeAudioFilterMode();
+
+            if (mode === 'vocal') showToast("보컬 강조 필터링 모드가 적용되었습니다.");
+            else if (mode === 'instrument') showToast("악기(MR) 강조 필터링 모드가 적용되었습니다.");
+            else showToast("전체 음원 모드로 변경되었습니다.");
+        }
+
+        function setupDragAndDrop() {
+            dropZone.addEventListener('click', () => {
+                ensureAudioContext();
+                fileInput.click();
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('drop-active');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('drop-active');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                ensureAudioContext();
+                const files = e.dataTransfer.files;
+                if (files.length > 0) handleFiles(files);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                ensureAudioContext();
+                if (e.target.files.length > 0) {
+                    handleFiles(e.target.files);
+                    fileInput.value = '';
+                }
+            });
+        }
+
+        async function handleFiles(fileList) {
+            ensureAudioContext();
+            const validFiles = Array.from(fileList).filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(f.name));
+
+            if (validFiles.length === 0) {
+                showToast('지원되는 오디오 파일만 업로드할 수 있습니다.', 'error');
+                return;
+            }
+
+            showToast(`${validFiles.length}개 오디오 파일 분석 중...`);
+
+            for (const file of validFiles) {
+                const trackId = 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                const track = {
+                    id: trackId,
+                    file: file,
+                    name: file.name,
+                    size: formatBytes(file.size),
+                    originalBuffer: null,
+                    processedBuffer: null,
+                    processedBlob: null,
+                    processedUrl: null,
+                    lufs: null,
+                    vocalEnergy: null,
+                    instrumentEnergy: null,
+                    gainDbNeeded: 0,
+                    status: 'analyzing',
+                    errorMessage: ''
+                };
+
+                tracks.push(track);
+                renderTrackList();
+                await analyzeAudioTrackByMode(track);
+            }
+        }
+
+        async function analyzeAudioTrackByMode(track) {
+            try {
+                ensureAudioContext();
+                const arrayBuffer = await track.file.arrayBuffer();
+                const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                track.originalBuffer = decodedBuffer;
+
+                const sampleRate = decodedBuffer.sampleRate;
+                const duration = decodedBuffer.duration;
+                const numChannels = decodedBuffer.numberOfChannels;
+
+                const offlineCtx = new OfflineAudioContext(numChannels, duration * sampleRate, sampleRate);
+                const source = offlineCtx.createBufferSource();
+                source.buffer = decodedBuffer;
+
+                const highShelf = offlineCtx.createBiquadFilter();
+                highShelf.type = 'highshelf';
+                highShelf.frequency.value = 1500;
+                highShelf.gain.value = 4.0;
+
+                const highPass = offlineCtx.createBiquadFilter();
+                highPass.type = 'highpass';
+                highPass.frequency.value = 38.0;
+                highPass.Q.value = 0.5;
+
+                source.connect(highShelf);
+                highShelf.connect(highPass);
+                highPass.connect(offlineCtx.destination);
+                source.start(0);
+                const filteredBuffer = await offlineCtx.startRendering();
+
+                const vocalCtx = new OfflineAudioContext(numChannels, duration * sampleRate, sampleRate);
+                const vocalSource = vocalCtx.createBufferSource();
+                vocalSource.buffer = decodedBuffer;
+                
+                const vocalBp1 = vocalCtx.createBiquadFilter();
+                vocalBp1.type = 'bandpass';
+                vocalBp1.frequency.value = 1600;
+                vocalBp1.Q.value = 0.6;
+
+                vocalSource.connect(vocalBp1);
+                vocalBp1.connect(vocalCtx.destination);
+                vocalSource.start(0);
+                const vocalBuffer = await vocalCtx.startRendering();
+
+                let vocalSumSq = 0;
+                let vocalSamples = 0;
+                for (let c = 0; c < numChannels; c++) {
+                    const vData = vocalBuffer.getChannelData(c);
+                    for (let i = 0; i < vData.length; i++) vocalSumSq += vData[i] * vData[i];
+                    vocalSamples += vData.length;
+                }
+                track.vocalEnergy = 20 * Math.log10(Math.sqrt(vocalSumSq / vocalSamples) || 0.00001);
+
+                const instCtx = new OfflineAudioContext(numChannels, duration * sampleRate, sampleRate);
+                const instSource = instCtx.createBufferSource();
+                instSource.buffer = decodedBuffer;
+                
+                const lowPassInst = instCtx.createBiquadFilter();
+                lowPassInst.type = 'lowpass';
+                lowPassInst.frequency.value = 250;
+
+                const highPassInst = instCtx.createBiquadFilter();
+                highPassInst.type = 'highpass';
+                highPassInst.frequency.value = 4500;
+
+                const mergerInst = instCtx.createGain();
+
+                instSource.connect(lowPassInst);
+                instSource.connect(highPassInst);
+                lowPassInst.connect(mergerInst);
+                highPassInst.connect(mergerInst);
+                mergerInst.connect(instCtx.destination);
+
+                instSource.start(0);
+                const instBuffer = await instCtx.startRendering();
+
+                let instSumSq = 0;
+                let instSamples = 0;
+                for (let c = 0; c < numChannels; c++) {
+                    const iData = instBuffer.getChannelData(c);
+                    for (let i = 0; i < iData.length; i++) instSumSq += iData[i] * iData[i];
+                    instSamples += iData.length;
+                }
+                track.instrumentEnergy = 20 * Math.log10(Math.sqrt(instSumSq / instSamples) || 0.00001);
+
+                const hopSize = Math.floor(sampleRate * 0.1);
+                const blockSize = Math.floor(sampleRate * 0.4);
+                let blockMeanSquares = [];
+                const numFrames = filteredBuffer.length;
+
+                for (let i = 0; i <= numFrames - blockSize; i += hopSize) {
+                    let sumSq = 0;
+                    let count = 0;
+                    for (let c = 0; c < numChannels; c++) {
+                        const channelData = filteredBuffer.getChannelData(c);
+                        let chSum = 0;
+                        for (let j = i; j < i + blockSize; j++) chSum += channelData[j] * channelData[j];
+                        sumSq += chSum;
+                        count += blockSize;
+                    }
+                    const meanSq = sumSq / count;
+                    if (meanSq > 0) blockMeanSquares.push(meanSq);
+                }
+
+                if (blockMeanSquares.length === 0) {
+                    track.lufs = -70.0;
+                } else {
+                    const absGated = blockMeanSquares.filter(ms => (-0.691 + 10 * Math.log10(ms)) > -70.0);
+                    let targetBlocks = absGated.length > 0 ? absGated : blockMeanSquares;
+                    let finalSum = targetBlocks.reduce((acc, val) => acc + val, 0);
+                    let integratedLufs = -0.691 + 10 * Math.log10(finalSum / targetBlocks.length);
+                    track.lufs = Math.round((isFinite(integratedLufs) ? integratedLufs : -70) * 10) / 10;
+                }
+
+                track.status = 'ready';
+                if (!referenceTrackId) setReferenceTrack(track.id);
+            } catch (err) {
+                console.error('Analysis Error:', err);
+                track.status = 'error';
+                track.errorMessage = '분석 실패';
+            }
+
+            renderTrackList();
+            updateGlobalControls();
+        }
+
+        function setReferenceTrack(trackId) {
+            ensureAudioContext();
+            const track = tracks.find(t => t.id === trackId);
+            if (!track || (track.status !== 'ready' && track.status !== 'completed')) {
+                showToast('분석이 완료된 정상 음원만 기준 음원으로 지정할 수 있습니다.', 'error');
+                return;
+            }
+
+            referenceTrackId = trackId;
+            showToast(`'${track.name}'이(가) 기준 음원으로 지정되었습니다.`, 'success');
+            updateRefCard();
+            renderTrackList();
+            updateGlobalControls();
+        }
+
+        function updateRefCard() {
+            const refTrack = tracks.find(t => t.id === referenceTrackId);
+            if (!refTrack) {
+                refStatusBadge.textContent = '미지정';
+                refStatusBadge.className = 'px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 text-xs rounded-md font-medium whitespace-nowrap';
+                refTrackName.textContent = '목록에서 기준 음원을 지정해주세요';
+                refTrackMetrics.textContent = '목표 수치: -';
+                return;
+            }
+
+            refStatusBadge.textContent = '기준 설정됨';
+            refStatusBadge.className = 'px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs rounded-md font-semibold whitespace-nowrap';
+            refTrackName.textContent = refTrack.name;
+            
+            if (selectedNormMode === 'vocal') {
+                refTrackMetrics.textContent = `기준 보컬 에너지: ${refTrack.vocalEnergy !== null ? refTrack.vocalEnergy.toFixed(1) + ' dB' : '-'}`;
+            } else {
+                refTrackMetrics.textContent = `기준 악기 에너지: ${refTrack.instrumentEnergy !== null ? refTrack.instrumentEnergy.toFixed(1) + ' dB' : '-'}`;
+            }
+        }
+
+        async function processTrackGain(track) {
+            ensureAudioContext();
+            const refTrack = tracks.find(t => t.id === referenceTrackId);
+            if (!track.originalBuffer || !refTrack) return;
+
+            track.status = 'processing';
+            renderTrackList();
+
+            try {
+                let gainDbNeeded = 0;
+
+                const duration = track.originalBuffer.duration;
+                const sampleRate = track.originalBuffer.sampleRate;
+                const channels = track.originalBuffer.numberOfChannels;
+
+                const offlineCtx = new OfflineAudioContext(channels, duration * sampleRate, sampleRate);
+                const source = offlineCtx.createBufferSource();
+                source.buffer = track.originalBuffer;
+
+                const masterGain = offlineCtx.createGain();
+                const filter1 = offlineCtx.createBiquadFilter();
+                const filter2 = offlineCtx.createBiquadFilter();
+
+                if (selectedNormMode === 'vocal') {
+                    gainDbNeeded = refTrack.vocalEnergy - track.vocalEnergy;
+                    
+                    filter1.type = 'peaking';
+                    filter1.frequency.value = 1500;
+                    filter1.Q.value = 1.0;
+                    filter1.gain.value = 2.5;
+
+                    filter2.type = 'highpass';
+                    filter2.frequency.value = 75;
+                } else {
+                    gainDbNeeded = refTrack.instrumentEnergy - track.instrumentEnergy;
+
+                    filter1.type = 'lowshelf';
+                    filter1.frequency.value = 120;
+                    filter1.gain.value = 3.0;
+
+                    filter2.type = 'highshelf';
+                    filter2.frequency.value = 6000;
+                    filter2.gain.value = 2.0;
+                }
+
+                track.gainDbNeeded = Math.round(gainDbNeeded * 10) / 10;
+                const gainMultiplier = Math.pow(10, gainDbNeeded / 20);
+                masterGain.gain.value = gainMultiplier;
+
+                const compressor = offlineCtx.createDynamicsCompressor();
+                compressor.threshold.value = -0.5;
+                compressor.ratio.value = 20.0;
+                compressor.attack.value = 0.001;
+                compressor.release.value = 0.050;
+
+                source.connect(masterGain);
+                masterGain.connect(filter1);
+                filter1.connect(filter2);
+                filter2.connect(compressor);
+                compressor.connect(offlineCtx.destination);
+                
+                source.start(0);
+
+                const renderedBuffer = await offlineCtx.startRendering();
+                track.processedBuffer = renderedBuffer;
+
+                const wavBlob = audioBufferToWavBlob(renderedBuffer);
+                track.processedBlob = wavBlob;
+                if (track.processedUrl) URL.revokeObjectURL(track.processedUrl);
+                track.processedUrl = URL.createObjectURL(wavBlob);
+
+                track.status = 'completed';
+            } catch (err) {
+                console.error('Processing error:', err);
+                track.status = 'error';
+                track.errorMessage = '변환 실패';
+            }
+
+            renderTrackList();
+            updateGlobalControls();
+        }
+
+        async function processAllTracksToRef() {
+            ensureAudioContext();
+            const refTrack = tracks.find(t => t.id === referenceTrackId);
+            if (!refTrack) {
+                showToast('기준 음원을 먼저 설정해 주세요.', 'error');
+                return;
+            }
+
+            const targetTracks = tracks.filter(t => t.id !== referenceTrackId && (t.status === 'ready' || t.status === 'completed'));
+            if (targetTracks.length === 0) {
+                showToast('변환할 음원이 없습니다.');
+                return;
+            }
+
+            showToast(`[${selectedNormMode === 'vocal' ? '보컬 대역' : '악기 대역'} 기준] 맞춤형 평준화를 시작합니다...`);
+
+            for (const track of targetTracks) {
+                await processTrackGain(track);
+            }
+
+            showToast('모든 음원의 모드별 평준화가 완료되었습니다!', 'success');
+        }
+
+        function renderTrackList() {
+            fileCount.textContent = tracks.length;
+
+            if (tracks.length === 0) {
+                emptyList.classList.remove('hidden');
+                trackList.classList.add('hidden');
+                statusSummary.textContent = '업로드된 파일 없음';
+                return;
+            }
+
+            emptyList.classList.add('hidden');
+            trackList.classList.remove('hidden');
+
+            const completedCount = tracks.filter(t => t.status === 'completed').length;
+            statusSummary.textContent = `${completedCount}/${tracks.length}개 음원 보정 완료`;
+
+            const refTrack = tracks.find(t => t.id === referenceTrackId);
+
+            trackList.innerHTML = tracks.map((track, idx) => {
+                const isRef = track.id === referenceTrackId;
+                const isPlayingOriginal = currentPlayingTrackId === track.id && currentPlayingType === 'original';
+                const isPlayingProcessed = currentPlayingTrackId === track.id && currentPlayingType === 'processed';
+
+                let currentVal, targetVal, labelTitle;
+                if (selectedNormMode === 'vocal') {
+                    labelTitle = '보컬 에너지';
+                    currentVal = track.vocalEnergy !== null ? `${track.vocalEnergy.toFixed(1)} dB` : '분석 중...';
+                    targetVal = refTrack ? `${refTrack.vocalEnergy.toFixed(1)} dB` : '-';
+                } else {
+                    labelTitle = '악기 에너지';
+                    currentVal = track.instrumentEnergy !== null ? `${track.instrumentEnergy.toFixed(1)} dB` : '분석 중...';
+                    targetVal = refTrack ? `${refTrack.instrumentEnergy.toFixed(1)} dB` : '-';
+                }
+
+                let statusBadge = '';
+                if (isRef) {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold whitespace-nowrap"><i class="fa-solid fa-star text-[10px]"></i> 기준 음원</span>`;
+                } else if (track.status === 'analyzing') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] flex items-center gap-1 whitespace-nowrap"><i class="fa-solid fa-spinner animate-spin"></i> 분석 중</span>`;
+                } else if (track.status === 'ready') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[11px] whitespace-nowrap">대기 중</span>`;
+                } else if (track.status === 'processing') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[11px] flex items-center gap-1 whitespace-nowrap"><i class="fa-solid fa-gear animate-spin"></i> 변환 중</span>`;
+                } else if (track.status === 'completed') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] whitespace-nowrap"><i class="fa-solid fa-check"></i> 완료 (${track.gainDbNeeded >= 0 ? '+' : ''}${track.gainDbNeeded}dB)</span>`;
+                } else {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[11px] whitespace-nowrap">오류</span>`;
+                }
+
+                return `
+                <div class="p-3 sm:p-4 ${isRef ? 'bg-amber-950/20 border-l-4 border-amber-500' : 'hover:bg-slate-800/40'} transition flex flex-wrap xl:flex-nowrap items-center justify-between gap-3 sm:gap-4">
+                    <div class="flex items-center gap-3 min-w-[200px] flex-1 shrink-0">
+                        <button onclick="setReferenceTrack('${track.id}')" title="${isRef ? '현재 기준 음원' : '이 파일을 기준 음원으로 설정'}" 
+                            class="w-8 h-8 rounded-lg ${isRef ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20' : 'bg-slate-800 hover:bg-amber-500/20 border border-slate-700 text-slate-400 hover:text-amber-400'} flex items-center justify-center shrink-0 transition">
+                            <i class="fa-solid fa-star text-xs"></i>
+                        </button>
+                        <div class="min-w-0 flex-1">
+                            <h3 class="text-xs font-semibold text-slate-200 truncate" title="${escapeHtml(track.name)}">${escapeHtml(track.name)}</h3>
+                            <p class="text-[11px] text-slate-400 truncate">${track.size}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between sm:justify-center gap-4 sm:gap-6 bg-slate-950/40 px-3 py-2 rounded-xl border border-slate-800/80 shrink-0">
+                        <div class="text-center min-w-[70px]">
+                            <span class="block text-[10px] text-slate-500 uppercase font-mono whitespace-nowrap">현재 ${labelTitle}</span>
+                            <span class="text-xs font-bold font-mono text-amber-300 whitespace-nowrap">${currentVal}</span>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-xs text-slate-600 shrink-0"></i>
+                        <div class="text-center min-w-[70px]">
+                            <span class="block text-[10px] text-slate-500 uppercase font-mono whitespace-nowrap">목표 ${labelTitle}</span>
+                            <span class="text-xs font-bold font-mono text-emerald-400 whitespace-nowrap">${targetVal}</span>
+                        </div>
+                        <div class="shrink-0">${statusBadge}</div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 shrink-0">
+                        <div class="flex items-center gap-1 bg-slate-800/80 p-1 rounded-lg border border-slate-700/60 shrink-0">
+                            <button onclick="playTrackPreview('${track.id}', 'original')" ${!track.originalBuffer ? 'disabled' : ''} 
+                                class="px-2 py-1 rounded text-[11px] font-medium transition whitespace-nowrap ${isPlayingOriginal ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 disabled:opacity-40'}">
+                                <i class="fa-solid ${isPlayingOriginal ? 'fa-pause' : 'fa-play'} text-[10px] mr-1"></i> 원본
+                            </button>
+                            <button onclick="playTrackPreview('${track.id}', 'processed')" ${track.status !== 'completed' ? 'disabled' : ''} 
+                                class="px-2 py-1 rounded text-[11px] font-medium transition whitespace-nowrap ${isPlayingProcessed ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-700 disabled:opacity-40'}">
+                                <i class="fa-solid ${isPlayingProcessed ? 'fa-pause' : 'fa-play'} text-[10px] mr-1"></i> 맞춤본
+                            </button>
+                        </div>
+
+                        <button onclick="processTrackGain(tracks[${idx}])" ${isRef || track.status === 'analyzing' || track.status === 'processing' ? 'disabled' : ''} 
+                            title="모드별 보정"
+                            class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-lg text-xs font-medium transition disabled:opacity-30 shrink-0">
+                            <i class="fa-solid fa-wand-magic"></i>
+                        </button>
+
+                        <button onclick="openDownloadModal('single', '${track.id}')" ${track.status !== 'completed' ? 'disabled' : ''} 
+                            title="다운로드"
+                            class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white rounded-lg text-xs font-medium transition disabled:opacity-30 shrink-0">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+
+                        <button onclick="removeTrack('${track.id}')" class="px-2 py-1.5 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 rounded-lg text-xs transition shrink-0">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function updateGlobalControls() {
+            const hasTracks = tracks.length > 0;
+            const refTrack = tracks.find(t => t.id === referenceTrackId);
+            const canProcess = refTrack && tracks.some(t => t.id !== referenceTrackId && (t.status === 'ready' || t.status === 'completed'));
+            const hasCompleted = tracks.some(t => t.status === 'completed') || !!refTrack;
+
+            processAllBtn.disabled = !canProcess;
+            if (canProcess) {
+                processAllBtn.classList.remove('bg-slate-800', 'text-slate-500', 'cursor-not-allowed');
+                processAllBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'text-white', 'cursor-pointer');
+            } else {
+                processAllBtn.classList.add('bg-slate-800', 'text-slate-500', 'cursor-not-allowed');
+                processAllBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-500', 'text-white', 'cursor-pointer');
+            }
+
+            downloadAllBtn.disabled = !hasCompleted;
+            if (hasCompleted) {
+                downloadAllBtn.classList.remove('bg-slate-800', 'text-slate-500', 'cursor-not-allowed');
+                downloadAllBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'cursor-pointer');
+            } else {
+                downloadAllBtn.classList.add('bg-slate-800', 'text-slate-500', 'cursor-not-allowed');
+                downloadAllBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'cursor-pointer');
+            }
+
+            clearAllBtn.disabled = !hasTracks;
+        }
+
+        function setupAudioPlayer() {
+            activeAudioElement.addEventListener('timeupdate', () => {
+                if (activeAudioElement.duration) {
+                    const percent = (activeAudioElement.currentTime / activeAudioElement.duration) * 100;
+                    playerProgress.value = percent;
+                    playerCurrentTime.textContent = formatTime(activeAudioElement.currentTime);
+                    playerTotalTime.textContent = formatTime(activeAudioElement.duration);
+                }
+            });
+
+            activeAudioElement.addEventListener('ended', () => {
+                currentPlayingTrackId = null;
+                currentPlayingType = null;
+                playerPlayBtn.innerHTML = `<i class="fa-solid fa-play text-sm"></i>`;
+                stopEqualizerVisualization();
+                renderTrackList();
+            });
+
+            playerProgress.addEventListener('input', (e) => {
+                if (activeAudioElement.duration) {
+                    const seekTime = (e.target.value / 100) * activeAudioElement.duration;
+                    activeAudioElement.currentTime = seekTime;
+                }
+            });
+        }
+
+        function playTrackPreview(trackId, type) {
+            ensureAudioContext();
+            const track = tracks.find(t => t.id === trackId);
+            if (!track) return;
+
+            if (currentPlayingTrackId === trackId && currentPlayingType === type) {
+                if (activeAudioElement.paused) {
+                    activeAudioElement.play().then(() => {
+                        playerPlayBtn.innerHTML = `<i class="fa-solid fa-pause text-sm"></i>`;
+                        startEqualizerVisualization();
+                    }).catch(err => {
+                        console.error("Playback resume error:", err);
+                        showToast("브라우저 재생 정책으로 차단되었습니다. 화면을 클릭 후 다시 시도해 주세요.", "error");
+                    });
+                } else {
+                    activeAudioElement.pause();
+                    playerPlayBtn.innerHTML = `<i class="fa-solid fa-play text-sm"></i>`;
+                    stopEqualizerVisualization();
+                }
+                renderTrackList();
+                return;
+            }
+
+            currentPlayingTrackId = trackId;
+            currentPlayingType = type;
+
+            let url = type === 'original' ? URL.createObjectURL(track.file) : track.processedUrl;
+            playerTrackStatus.textContent = type === 'original' ? '원본 오디오 모니터링 중' : `맞춤본 모니터링 중 (${track.gainDbNeeded >= 0 ? '+' : ''}${track.gainDbNeeded}dB)`;
+
+            activeAudioElement.src = url;
+            playerTrackTitle.textContent = track.name;
+            playerBar.classList.remove('hidden');
+
+            setupAudioAnalyzerGraph();
+            applyRealtimeAudioFilterMode();
+
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    executeAudioPlay();
+                });
+            } else {
+                executeAudioPlay();
+            }
+
+            renderTrackList();
+        }
+
+        function executeAudioPlay() {
+            activeAudioElement.play().then(() => {
+                playerPlayBtn.innerHTML = `<i class="fa-solid fa-pause text-sm"></i>`;
+                startEqualizerVisualization();
+            }).catch(e => {
+                console.error("Playback error:", e);
+                showToast("오디오 출력 실패: 화면을 클릭한 뒤 다시 재생 버튼을 눌러주세요.", "error");
+            });
+        }
+
+        function togglePlayPreview() {
+            ensureAudioContext();
+            if (!currentPlayingTrackId) return;
+            if (activeAudioElement.paused) {
+                executeAudioPlay();
+            } else {
+                activeAudioElement.pause();
+                playerPlayBtn.innerHTML = `<i class="fa-solid fa-play text-sm"></i>`;
+                stopEqualizerVisualization();
+            }
+        }
+
+        function setupAudioAnalyzerGraph() {
+            ensureAudioContext();
+            if (!audioCtx) return;
+
+            if (!isNodeConnected) {
+                try {
+                    sourceNode = audioCtx.createMediaElementSource(activeAudioElement);
+                    
+                    splitterNode = audioCtx.createChannelSplitter(2);
+                    mergerNode = audioCtx.createChannelMerger(2);
+
+                    vocalFilterBp = audioCtx.createBiquadFilter();
+                    vocalFilterBp.type = 'bandpass';
+                    vocalFilterBp.frequency.value = 1600;
+                    vocalFilterBp.Q.value = 0.8;
+
+                    instGainLeft = audioCtx.createGain();
+                    instGainRight = audioCtx.createGain();
+
+                    masterListenGain = audioCtx.createGain();
+                    masterListenGain.gain.value = 1.0;
+
+                    analyserNode = audioCtx.createAnalyser();
+                    analyserNode.fftSize = 256;
+
+                    sourceNode.connect(masterListenGain);
+                    masterListenGain.connect(analyserNode);
+                    analyserNode.connect(audioCtx.destination);
+
+                    isNodeConnected = true;
+                } catch (e) {
+                    console.log('Analyzer graph setup note:', e);
+                }
+            }
+        }
+
+        function applyRealtimeAudioFilterMode() {
+            ensureAudioContext();
+            if (!isNodeConnected || !audioCtx) return;
+
+            try {
+                sourceNode.disconnect();
+                vocalFilterBp.disconnect();
+                masterListenGain.disconnect();
+                splitterNode.disconnect();
+                instGainLeft.disconnect();
+                instGainRight.disconnect();
+                mergerNode.disconnect();
+
+                if (currentListenMode === 'full') {
+                    masterListenGain.gain.value = 1.0;
+                    sourceNode.connect(masterListenGain);
+                    masterListenGain.connect(analyserNode);
+                } else if (currentListenMode === 'vocal') {
+                    masterListenGain.gain.value = 1.4;
+                    sourceNode.connect(vocalFilterBp);
+                    vocalFilterBp.connect(masterListenGain);
+                    masterListenGain.connect(analyserNode);
+                } else if (currentListenMode === 'instrument') {
+                    masterListenGain.gain.value = 1.2;
+                    sourceNode.connect(splitterNode);
+
+                    instGainLeft.gain.value = 1.0;
+                    instGainRight.gain.value = -1.0;
+
+                    splitterNode.connect(instGainLeft, 0);
+                    splitterNode.connect(instGainRight, 1);
+
+                    instGainLeft.connect(mergerNode, 0, 0);
+                    instGainRight.connect(mergerNode, 0, 0);
+
+                    instGainLeft.connect(mergerNode, 0, 1);
+                    instGainRight.connect(mergerNode, 0, 1);
+
+                    mergerNode.connect(masterListenGain);
+                    masterListenGain.connect(analyserNode);
+                }
+            } catch (err) {
+                console.error('Filter mode switch error:', err);
+            }
+        }
+
+        function drawStaticGrid(ctx, width, height) {
+            ctx.fillStyle = '#070a13';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.25)';
+            ctx.lineWidth = 1;
+            const freqLines = [100, 500, 1000, 5000, 10000];
+            freqLines.forEach(f => {
+                const x = (Math.log10(f / 20) / Math.log10(1000)) * width;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            });
+
+            const dbLines = [-20, 0, 20];
+            dbLines.forEach(db => {
+                const y = height / 2 - (db / 40) * (height / 2);
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            });
+        }
+
+        function startEqualizerVisualization() {
+            if (!analyserNode) return;
+            cancelAnimationFrame(animationFrameId);
+
+            const canvas = equalizerCanvas;
+            const ctx = canvas.getContext('2d');
+            const bufferLength = analyserNode.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function draw() {
+                animationFrameId = requestAnimationFrame(draw);
+                analyserNode.getByteFrequencyData(dataArray);
+
+                drawStaticGrid(ctx, canvas.width, canvas.height);
+
+                ctx.beginPath();
+                const sliceWidth = canvas.width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 255.0;
+                    const y = canvas.height - (v * canvas.height * 0.85) - 10;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+
+                ctx.lineTo(canvas.width, canvas.height);
+                ctx.lineTo(0, canvas.height);
+                ctx.closePath();
+
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
+                gradient.addColorStop(0.6, 'rgba(56, 189, 248, 0.2)');
+                gradient.addColorStop(1, 'rgba(15, 23, 42, 0.05)');
+                
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                ctx.beginPath();
+                x = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 255.0;
+                    const y = canvas.height - (v * canvas.height * 0.85) - 10;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                ctx.strokeStyle = 'rgba(129, 140, 248, 0.95)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                const nodeIndices = [2, 8, 18, 36, 54];
+                nodeIndices.forEach(i => {
+                    if (i < bufferLength) {
+                        const v = dataArray[i] / 255.0;
+                        const px = (i / bufferLength) * canvas.width;
+                        const py = canvas.height - (v * canvas.height * 0.85) - 10;
+
+                        ctx.beginPath();
+                        ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#38bdf8';
+                        ctx.fill();
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1.2;
+                        ctx.stroke();
+                    }
+                });
+            }
+            draw();
+        }
+
+        function stopEqualizerVisualization() {
+            cancelAnimationFrame(animationFrameId);
+            initCanvasSize();
+        }
+
+        /* --- Download & Modal Handling --- */
+        function openDownloadModal(type, trackId = null) {
+            pendingDownloadType = type;
+            pendingDownloadTrackId = trackId;
+            downloadModal.classList.remove('hidden');
+        }
+
+        function closeDownloadModal() {
+            pendingDownloadType = null;
+            pendingDownloadTrackId = null;
+            downloadModal.classList.add('hidden');
+        }
+
+        function confirmDownloadExecution() {
+            const selectedFormat = document.querySelector('input[name="formatOption"]:checked').value;
+            closeDownloadModal();
+
+            if (pendingDownloadType === 'single') {
+                downloadSingleTrack(pendingDownloadTrackId, selectedFormat);
+            } else if (pendingDownloadType === 'all') {
+                downloadAllProcessed(selectedFormat);
+            }
+        }
+
+        function downloadSingleTrack(trackId, ext = 'wav') {
+            const track = tracks.find(t => t.id === trackId);
+            if (!track || !track.processedBlob) return;
+
+            const nameParts = track.name.split('.');
+            nameParts.pop();
+            const baseName = nameParts.join('.');
+            const newFilename = `${baseName}_${selectedNormMode}_normalized.${ext}`;
+
+            const link = document.createElement('a');
+            link.href = track.processedUrl;
+            link.download = newFilename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(`${newFilename} 다운로드가 완료되었습니다.`, 'success');
+        }
+
+        async function downloadAllProcessed(ext = 'wav') {
+            const refTrack = tracks.find(t => t.id === referenceTrackId);
+            const completedTracks = tracks.filter(t => t.status === 'completed');
+            if (!refTrack && completedTracks.length === 0) return;
+
+            showToast(`[.${ext.toUpperCase()}] ZIP 압축 파일 생성 중...`);
+            const zip = new JSZip();
+
+            if (refTrack && refTrack.file) {
+                zip.file(`[Reference]_${refTrack.name}`, refTrack.file);
+            }
+
+            completedTracks.forEach((track) => {
+                if (track.id === referenceTrackId) return;
+                const nameParts = track.name.split('.');
+                nameParts.pop();
+                const baseName = nameParts.join('.');
+                zip.file(`${baseName}_${selectedNormMode}_normalized.${ext}`, track.processedBlob);
+            });
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `normalized_tracks_${selectedNormMode}_${ext}_${Date.now()}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(`전체 .ZIP (${ext.toUpperCase()}) 압축 파일 다운로드 완료!`, 'success');
+        }
+
+        function removeTrack(trackId) {
+            if (currentPlayingTrackId === trackId) {
+                activeAudioElement.pause();
+                stopEqualizerVisualization();
+                currentPlayingTrackId = null;
+                currentPlayingType = null;
+                playerBar.classList.add('hidden');
+            }
+
+            const track = tracks.find(t => t.id === trackId);
+            if (track && track.processedUrl) URL.revokeObjectURL(track.processedUrl);
+
+            tracks = tracks.filter(t => t.id !== trackId);
+            if (referenceTrackId === trackId) {
+                referenceTrackId = tracks.length > 0 ? tracks[0].id : null;
+                updateRefCard();
+            }
+
+            renderTrackList();
+            updateGlobalControls();
+        }
+
+        function clearAllFiles() {
+            activeAudioElement.pause();
+            stopEqualizerVisualization();
+            currentPlayingTrackId = null;
+            currentPlayingType = null;
+            playerBar.classList.add('hidden');
+
+            tracks.forEach(track => {
+                if (track.processedUrl) URL.revokeObjectURL(track.processedUrl);
+            });
+
+            tracks = [];
+            referenceTrackId = null;
+            updateRefCard();
+            renderTrackList();
+            updateGlobalControls();
+            showToast('모든 음원 목록이 삭제되었습니다.');
+        }
+
+        function audioBufferToWavBlob(buffer) {
+            const numChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            let result = numChannels === 2 ? interleave(buffer.getChannelData(0), buffer.getChannelData(1)) : buffer.getChannelData(0);
+            return createWavBlob(result, numChannels, sampleRate, 16);
+        }
+
+        function interleave(inputL, inputR) {
+            const length = inputL.length + inputR.length;
+            const result = new Float32Array(length);
+            let index = 0, inputIndex = 0;
+            while (index < length) {
+                result[index++] = inputL[inputIndex];
+                result[index++] = inputR[inputIndex];
+                inputIndex++;
+            }
+            return result;
+        }
+
+        function createWavBlob(samples, numChannels, sampleRate, bitDepth) {
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numChannels * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+            const view = new DataView(buffer);
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitDepth, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * bytesPerSample, true);
+
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                const s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = message;
+            if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400';
+            } else if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-info text-indigo-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
